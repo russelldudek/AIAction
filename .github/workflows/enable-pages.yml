@@ -1,10 +1,15 @@
-name: Enable and deploy candidate vision
+name: Validate and deploy candidate vision
 
 on:
   push:
     branches: [main]
     paths:
+      - '.release-bundle/**'
+      - 'materialize_release.py'
       - '.github/workflows/enable-pages.yml'
+      - 'index.html'
+      - 'styles.css'
+      - 'app.js'
   workflow_dispatch:
 
 permissions:
@@ -14,17 +19,60 @@ permissions:
 
 concurrency:
   group: pages
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
-  enable-and-deploy:
+  validate-and-deploy:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Checkout
+      - name: Checkout main
         uses: actions/checkout@v6
+
+      - name: Materialize release package when present
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f materialize_release.py ]; then
+            python materialize_release.py
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add -A
+            git commit -m 'Publish Living Precedent Engine'
+            git push
+          fi
+          git rev-parse HEAD > /tmp/source-sha
+
+      - name: Install PDF inspection tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y poppler-utils
+
+      - name: Validate source and exact PDF contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in index.html styles.css app.js resume.html cover-letter.html interview-brief.html 120-day-plan.html workflow-precedent-review.html source-notes.html artifact-manifest.json .nojekyll; do
+            test -s "$file" || { echo "Missing or empty: $file"; exit 1; }
+          done
+          check_pages() {
+            local file="$1"
+            local expected="$2"
+            local actual
+            actual=$(pdfinfo "$file" | awk '/^Pages:/ {print $2}')
+            test "$actual" = "$expected" || {
+              echo "Page contract failed for $file: expected $expected, got $actual"
+              exit 1
+            }
+          }
+          check_pages pdfs/Russell-Dudek-Covington-Resume.pdf 2
+          check_pages pdfs/Russell-Dudek-Covington-Cover-Letter.pdf 1
+          check_pages pdfs/Russell-Dudek-Covington-Interview-Brief.pdf 4
+          check_pages pdfs/Russell-Dudek-Covington-120-Day-Plan.pdf 3
+          check_pages pdfs/Russell-Dudek-Covington-Workflow-Precedent-Review.pdf 2
 
       - name: Enable GitHub Pages when missing
         env:
@@ -57,7 +105,7 @@ jobs:
             exit 1
           fi
 
-      - name: Stage candidate-facing site
+      - name: Stage public site
         shell: bash
         run: |
           set -euo pipefail
@@ -79,6 +127,47 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
 
+      - name: Verify live routes
+        shell: bash
+        env:
+          PUBLIC_URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          set -euo pipefail
+          base="${PUBLIC_URL%/}/"
+          routes=(
+            ""
+            "styles.css"
+            "app.js"
+            "resume.html"
+            "cover-letter.html"
+            "interview-brief.html"
+            "120-day-plan.html"
+            "workflow-precedent-review.html"
+            "source-notes.html"
+            "pdfs/Russell-Dudek-Covington-Resume.pdf"
+            "pdfs/Russell-Dudek-Covington-Cover-Letter.pdf"
+            "pdfs/Russell-Dudek-Covington-Interview-Brief.pdf"
+            "pdfs/Russell-Dudek-Covington-120-Day-Plan.pdf"
+            "pdfs/Russell-Dudek-Covington-Workflow-Precedent-Review.pdf"
+          )
+          for attempt in $(seq 1 30); do
+            failed=0
+            for route in "${routes[@]}"; do
+              code=$(curl -L -sS -o /tmp/live-body -w '%{http_code}' "${base}${route}" || true)
+              if [ "$code" != "200" ]; then
+                failed=1
+                break
+              fi
+            done
+            if [ "$failed" = "0" ]; then
+              printf '%s' "$base" > /tmp/live-url
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Live route verification did not reach HTTP 200 within the retry window."
+          exit 1
+
       - name: Record live deployment
         if: success()
         shell: bash
@@ -86,11 +175,13 @@ jobs:
           python - <<'PY'
           from pathlib import Path
           import json
-          url = '${{ steps.deployment.outputs.page_url }}'
+          url = Path('/tmp/live-url').read_text().strip()
           Path('pages-status.json').write_text(json.dumps({
+              'source_sha': Path('/tmp/source-sha').read_text().strip(),
               'configure_outcome': 'success',
               'upload_outcome': 'success',
               'deploy_outcome': 'success',
+              'live_outcome': 'success',
               'deployment_url': url,
               'api_response': {'html_url': url, 'build_type': 'workflow'}
           }, indent=2) + '\n')
