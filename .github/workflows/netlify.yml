@@ -1,0 +1,100 @@
+name: Deploy live review site
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/netlify.yml'
+      - 'index.html'
+      - 'styles.css'
+      - 'app.js'
+      - '*.html'
+      - 'pdfs/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  NETLIFY_SITE_ID: 10a807db-a525-471a-b71f-3b871399f7f2
+  LIVE_URL: https://russell-dudek-covington-ai.netlify.app/
+
+jobs:
+  deploy:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Deploy existing Netlify project
+        id: deploy
+        continue-on-error: true
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$NETLIFY_AUTH_TOKEN"
+          rm -rf _site
+          mkdir -p _site/pdfs
+          cp index.html resume.html cover-letter.html interview-brief.html 120-day-plan.html workflow-precedent-review.html source-notes.html styles.css app.js _site/
+          cp pdfs/*.pdf _site/pdfs/
+          touch _site/.nojekyll
+          npx -y netlify-cli@latest deploy --prod --json --dir=_site --site="$NETLIFY_SITE_ID" --auth="$NETLIFY_AUTH_TOKEN" > /tmp/netlify-deploy.json
+          cat /tmp/netlify-deploy.json
+
+      - name: Verify live review routes
+        id: live
+        if: steps.deploy.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          routes=("" styles.css app.js resume.html cover-letter.html interview-brief.html 120-day-plan.html workflow-precedent-review.html source-notes.html pdfs/Russell-Dudek-Covington-Resume.pdf pdfs/Russell-Dudek-Covington-Cover-Letter.pdf)
+          for attempt in $(seq 1 24); do
+            failed=0
+            for route in "${routes[@]}"; do
+              code=$(curl -L -sS -o /tmp/live -w '%{http_code}' "${LIVE_URL}${route}" || true)
+              [ "$code" = "200" ] || { failed=1; break; }
+            done
+            [ "$failed" = "0" ] && exit 0
+            sleep 10
+          done
+          exit 1
+
+      - name: Record live-site status
+        if: always()
+        env:
+          DEPLOY_OUTCOME: ${{ steps.deploy.outcome }}
+          LIVE_OUTCOME: ${{ steps.live.outcome }}
+          TOKEN_AVAILABLE: ${{ secrets.NETLIFY_AUTH_TOKEN != '' }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import json, os
+          raw = Path('/tmp/netlify-deploy.json').read_text() if Path('/tmp/netlify-deploy.json').exists() else ''
+          try:
+              response = json.loads(raw) if raw else None
+          except json.JSONDecodeError:
+              response = raw
+          Path('live-site-status.json').write_text(json.dumps({
+              'source_sha': os.environ.get('GITHUB_SHA'),
+              'token_available': os.environ.get('TOKEN_AVAILABLE') == 'true',
+              'deploy_outcome': os.environ.get('DEPLOY_OUTCOME'),
+              'live_outcome': os.environ.get('LIVE_OUTCOME'),
+              'live_url': os.environ.get('LIVE_URL'),
+              'deploy_response': response
+          }, indent=2) + '\n')
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add live-site-status.json
+          if ! git diff --cached --quiet; then
+            git commit -m 'Record live review site status'
+            git push
+          fi
+
+      - name: Fail when live review is unavailable
+        if: steps.deploy.outcome != 'success' || steps.live.outcome != 'success'
+        run: exit 1
