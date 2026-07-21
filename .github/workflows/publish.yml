@@ -1,0 +1,141 @@
+name: Build PDFs and publish candidate vision
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.campaign-bundle/**'
+      - 'materialize_campaign.py'
+      - '.github/workflows/publish.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build-and-publish:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Materialize campaign
+        run: python materialize_campaign.py
+
+      - name: Set up Chrome
+        id: chrome
+        uses: browser-actions/setup-chrome@v2
+
+      - name: Install PDF inspection tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y poppler-utils
+
+      - name: Generate recruiter-ready PDFs
+        shell: bash
+        run: |
+          set -euo pipefail
+          CHROME='${{ steps.chrome.outputs.chrome-path }}'
+          mkdir -p pdfs
+
+          render_pdf() {
+            local html="$1"
+            local output="$2"
+            timeout 90s "$CHROME" \
+              --headless=new \
+              --no-sandbox \
+              --disable-gpu \
+              --disable-dev-shm-usage \
+              --allow-file-access-from-files \
+              --run-all-compositor-stages-before-draw \
+              --virtual-time-budget=3000 \
+              --no-pdf-header-footer \
+              --print-to-pdf="$GITHUB_WORKSPACE/pdfs/$output" \
+              "file://$GITHUB_WORKSPACE/$html"
+          }
+
+          render_pdf resume.html Russell-Dudek-Covington-Resume.pdf
+          render_pdf cover-letter.html Russell-Dudek-Covington-Cover-Letter.pdf
+          render_pdf interview-brief.html Russell-Dudek-Covington-Interview-Brief.pdf
+          render_pdf 120-day-plan.html Russell-Dudek-Covington-120-Day-Plan.pdf
+          render_pdf workflow-precedent-review.html Russell-Dudek-Covington-Workflow-Precedent-Review.pdf
+
+      - name: Validate PDF contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          check_pages() {
+            local file="$1"
+            local expected="$2"
+            local actual
+            actual=$(pdfinfo "$file" | awk '/^Pages:/ {print $2}')
+            if [ "$actual" != "$expected" ]; then
+              echo "Page contract failed for $file: expected $expected, got $actual"
+              exit 1
+            fi
+          }
+          check_pages pdfs/Russell-Dudek-Covington-Resume.pdf 2
+          check_pages pdfs/Russell-Dudek-Covington-Cover-Letter.pdf 1
+          check_pages pdfs/Russell-Dudek-Covington-Interview-Brief.pdf 4
+          check_pages pdfs/Russell-Dudek-Covington-120-Day-Plan.pdf 3
+          check_pages pdfs/Russell-Dudek-Covington-Workflow-Precedent-Review.pdf 2
+
+      - name: Finalize publication state
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import json
+          manifest = Path('artifact-manifest.json')
+          data = json.loads(manifest.read_text())
+          data['state'] = 'published'
+          data['publication'] = {
+              'repository': 'public campaign repository',
+              'branch': 'main',
+              'candidate_vision': 'https://russelldudek.github.io/AIAction/'
+          }
+          manifest.write_text(json.dumps(data, indent=2) + '\n')
+
+          audit = Path('campaign-audit.md')
+          text = audit.read_text()
+          text = text.replace(
+              'State: building until publication and independent live verification complete.',
+              'State: published. Live verification remains a separate gate until GitHub Pages reports a successful deployment.'
+          )
+          text += '\n## Automated publication verification\n- Exact PDF page counts validated in GitHub Actions\n- Candidate files committed to main\n- Pages deployment attempted from the validated workspace\n'
+          audit.write_text(text)
+          PY
+          rm -rf .campaign-bundle materialize_campaign.py
+
+      - name: Commit validated campaign files
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -m 'Publish applied AI candidate vision and validated PDFs'
+            git push
+          fi
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v6
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: '.'
+
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
