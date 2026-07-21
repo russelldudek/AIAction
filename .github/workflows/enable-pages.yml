@@ -1,0 +1,104 @@
+name: Enable and deploy candidate vision
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/enable-pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  enable-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Enable GitHub Pages when missing
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          api="$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/pages"
+          code=$(curl -sS -o /tmp/pages-get.json -w '%{http_code}' \
+            -H 'Accept: application/vnd.github+json' \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'X-GitHub-Api-Version: 2026-03-10' \
+            "$api")
+          if [ "$code" = "404" ]; then
+            create_code=$(curl -sS -o /tmp/pages-create.json -w '%{http_code}' \
+              -X POST \
+              -H 'Accept: application/vnd.github+json' \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H 'X-GitHub-Api-Version: 2026-03-10' \
+              "$api" \
+              -d '{"build_type":"workflow"}')
+            cat /tmp/pages-create.json || true
+            if [ "$create_code" != "201" ] && [ "$create_code" != "409" ]; then
+              echo "Pages enablement failed with HTTP $create_code"
+              exit 1
+            fi
+          elif [ "$code" != "200" ]; then
+            cat /tmp/pages-get.json || true
+            echo "Pages status check failed with HTTP $code"
+            exit 1
+          fi
+
+      - name: Stage candidate-facing site
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf _site
+          mkdir -p _site/pdfs
+          cp index.html resume.html cover-letter.html interview-brief.html 120-day-plan.html workflow-precedent-review.html source-notes.html styles.css app.js _site/
+          cp pdfs/*.pdf _site/pdfs/
+          touch _site/.nojekyll
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v6
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Record live deployment
+        if: success()
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import json
+          url = '${{ steps.deployment.outputs.page_url }}'
+          Path('pages-status.json').write_text(json.dumps({
+              'configure_outcome': 'success',
+              'upload_outcome': 'success',
+              'deploy_outcome': 'success',
+              'deployment_url': url,
+              'api_response': {'html_url': url, 'build_type': 'workflow'}
+          }, indent=2) + '\n')
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add pages-status.json
+          if ! git diff --cached --quiet; then
+            git commit -m 'Record live candidate vision deployment'
+            git push
+          fi
