@@ -1,0 +1,74 @@
+name: Deploy candidate vision to Netlify once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.deploy-netlify-ready'
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout validated main
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Upload main to reserved production site
+        run: >-
+          npx -y @netlify/mcp@latest
+          --site-id 10a807db-a525-471a-b71f-3b871399f7f2
+          --proxy-path "https://netlify-mcp.netlify.app//proxy/eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2R0NNIn0..s-VHwjXcz2B64-6u.cnG8F99HOkshun_X-Br8kiSfTjQtSkiEbn50mLQW9ZJrcTQHKsDI5FC0lsX8-YpJx_9t5dGPqLDw8zsV49ERLroEvYk3mnTUJtKRcF91DOTDQLJPThP3KR6_OefjOBJpvtvQ2Zp_7tZ-XsLDJBrRIj6s1hCEK8E4hFP5rhpf5PeFHp3wkeM8orwjgBPnAMm2eB2plgTl-msvs_LLq6txBw7FSJ_FauuLuAblKbGG3KDXavppSuOcIU7bwslO4r_VoORKq6oPXQbgxNmeRoiPjbYto4L89PXcEHrkEdReDj4V4TC5R915MYj4Hu04usWCu9j59YpeubQ5Z3kAeMBPuzWyZYAkIPzpNBSrg8Mo266zWgKut-D_NpI9AT9fG-uMxH2sXhaE.b4zsLI2FFXMiY4QUAw6WYg"
+          --no-wait
+
+      - name: Verify exact live experience
+        run: |
+          set -euo pipefail
+          URL='https://russell-dudek-covington-ai.netlify.app'
+          ready=0
+          for attempt in $(seq 1 45); do
+            if curl -fsS "$URL/" -o /tmp/covington-live && grep -F 'Build the common law of AI-enabled work.' /tmp/covington-live >/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 8
+          done
+          [ "$ready" = '1' ]
+          grep -F 'Living precedent studio' /tmp/covington-live >/dev/null
+          curl -fsS "$URL/styles.css" | grep -F -- '--gold:#e8bd6b' >/dev/null
+          curl -fsS "$URL/app.js" | grep -F 'Living precedent sphere' >/dev/null
+          curl -fsSI "$URL/resume.html" | grep -E 'HTTP/[0-9.]+ 200' >/dev/null
+          curl -fsSI "$URL/cover-letter.html" | grep -E 'HTTP/[0-9.]+ 200' >/dev/null
+          curl -fsSI "$URL/pdfs/Russell-Dudek-Covington-Resume.pdf" | grep -E 'HTTP/[0-9.]+ 200' >/dev/null
+          curl -fsSI "$URL/pdfs/Russell-Dudek-Covington-Cover-Letter.pdf" | grep -E 'HTTP/[0-9.]+ 200' >/dev/null
+
+      - name: Record verified deployment and remove one-time job
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import json, hashlib, datetime
+          body = Path('/tmp/covington-live').read_bytes()
+          Path('live-site-status.json').write_text(json.dumps({
+            'source_sha': '${{ github.sha }}',
+            'live_outcome': 'success',
+            'live_url': 'https://russell-dudek-covington-ai.netlify.app/',
+            'source_signature_found': True,
+            'live_index_sha256': hashlib.sha256(body).hexdigest(),
+            'verified_at_utc': datetime.datetime.now(datetime.timezone.utc).isoformat()
+          }, indent=2) + '\n')
+          PY
+          rm -f .github/workflows/deploy-netlify-once.yml .deploy-netlify-ready
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Record verified live candidate vision'
+          git push
