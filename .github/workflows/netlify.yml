@@ -1,62 +1,45 @@
-name: Deploy live review site
+name: Verify live review site
 
 on:
   push:
     branches: [main]
-    paths:
-      - '.github/workflows/netlify.yml'
-      - 'index.html'
-      - 'styles.css'
-      - 'app.js'
-      - '*.html'
-      - 'pdfs/**'
   workflow_dispatch:
 
 permissions:
   contents: write
 
 env:
-  NETLIFY_SITE_ID: 10a807db-a525-471a-b71f-3b871399f7f2
   LIVE_URL: https://russell-dudek-covington-ai.netlify.app/
 
+concurrency:
+  group: live-review
+  cancel-in-progress: true
+
 jobs:
-  deploy:
+  verify:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
 
-      - name: Deploy existing Netlify project
-        id: deploy
-        continue-on-error: true
-        env:
-          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -n "$NETLIFY_AUTH_TOKEN"
-          rm -rf _site
-          mkdir -p _site/pdfs
-          cp index.html resume.html cover-letter.html interview-brief.html 120-day-plan.html workflow-precedent-review.html source-notes.html styles.css app.js _site/
-          cp pdfs/*.pdf _site/pdfs/
-          touch _site/.nojekyll
-          npx -y netlify-cli@latest deploy --prod --json --dir=_site --site="$NETLIFY_SITE_ID" --auth="$NETLIFY_AUTH_TOKEN" > /tmp/netlify-deploy.json
-          cat /tmp/netlify-deploy.json
-
-      - name: Verify live review routes
+      - name: Verify live review routes and source signature
         id: live
-        if: steps.deploy.outcome == 'success'
         continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
           routes=("" styles.css app.js resume.html cover-letter.html interview-brief.html 120-day-plan.html workflow-precedent-review.html source-notes.html pdfs/Russell-Dudek-Covington-Resume.pdf pdfs/Russell-Dudek-Covington-Cover-Letter.pdf)
-          for attempt in $(seq 1 24); do
+          for attempt in $(seq 1 30); do
             failed=0
             for route in "${routes[@]}"; do
-              code=$(curl -L -sS -o /tmp/live -w '%{http_code}' "${LIVE_URL}${route}" || true)
+              code=$(curl -L -sS -o /tmp/live-body -w '%{http_code}' "${LIVE_URL}${route}" || true)
               [ "$code" = "200" ] || { failed=1; break; }
             done
+            if [ "$failed" = "0" ]; then
+              curl -L -sS "${LIVE_URL}" -o /tmp/live-index
+              grep -q 'Living Precedent Engine' /tmp/live-index || { failed=1; }
+              grep -q 'Build the common law of AI-enabled work' /tmp/live-index || { failed=1; }
+            fi
             [ "$failed" = "0" ] && exit 0
             sleep 10
           done
@@ -65,36 +48,29 @@ jobs:
       - name: Record live-site status
         if: always()
         env:
-          DEPLOY_OUTCOME: ${{ steps.deploy.outcome }}
           LIVE_OUTCOME: ${{ steps.live.outcome }}
-          TOKEN_AVAILABLE: ${{ secrets.NETLIFY_AUTH_TOKEN != '' }}
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
-          import json, os
-          raw = Path('/tmp/netlify-deploy.json').read_text() if Path('/tmp/netlify-deploy.json').exists() else ''
-          try:
-              response = json.loads(raw) if raw else None
-          except json.JSONDecodeError:
-              response = raw
+          import json, os, hashlib
+          body = Path('/tmp/live-index').read_bytes() if Path('/tmp/live-index').exists() else b''
           Path('live-site-status.json').write_text(json.dumps({
               'source_sha': os.environ.get('GITHUB_SHA'),
-              'token_available': os.environ.get('TOKEN_AVAILABLE') == 'true',
-              'deploy_outcome': os.environ.get('DEPLOY_OUTCOME'),
               'live_outcome': os.environ.get('LIVE_OUTCOME'),
               'live_url': os.environ.get('LIVE_URL'),
-              'deploy_response': response
+              'source_signature_found': b'Living Precedent Engine' in body and b'Build the common law of AI-enabled work' in body,
+              'live_index_sha256': hashlib.sha256(body).hexdigest() if body else None
           }, indent=2) + '\n')
           PY
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add live-site-status.json
           if ! git diff --cached --quiet; then
-            git commit -m 'Record live review site status'
+            git commit -m 'Record live review verification'
             git push
           fi
 
       - name: Fail when live review is unavailable
-        if: steps.deploy.outcome != 'success' || steps.live.outcome != 'success'
+        if: steps.live.outcome != 'success'
         run: exit 1
