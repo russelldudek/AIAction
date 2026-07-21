@@ -6,6 +6,7 @@ on:
     paths:
       - '.campaign-bundle/**'
       - 'materialize_campaign.py'
+      - 'apply_verified_url_correction.py'
       - '.github/workflows/publish.yml'
   workflow_dispatch:
 
@@ -33,6 +34,12 @@ jobs:
         run: |
           if [ -f materialize_campaign.py ]; then
             python materialize_campaign.py
+          fi
+
+      - name: Apply verified portfolio URL correction
+        run: |
+          if [ -f apply_verified_url_correction.py ]; then
+            python apply_verified_url_correction.py
           fi
 
       - name: Set up Chrome
@@ -73,7 +80,7 @@ jobs:
           render_pdf 120-day-plan.html Russell-Dudek-Covington-120-Day-Plan.pdf
           render_pdf workflow-precedent-review.html Russell-Dudek-Covington-Workflow-Precedent-Review.pdf
 
-      - name: Validate PDF contracts
+      - name: Validate PDF contracts and verified URLs
         shell: bash
         run: |
           set -euo pipefail
@@ -92,6 +99,13 @@ jobs:
           check_pages pdfs/Russell-Dudek-Covington-Interview-Brief.pdf 4
           check_pages pdfs/Russell-Dudek-Covington-120-Day-Plan.pdf 3
           check_pages pdfs/Russell-Dudek-Covington-Workflow-Precedent-Review.pdf 2
+          for pdf in pdfs/*.pdf; do
+            pdftotext "$pdf" - | grep -F 'https://russelldudek.github.io/' >/dev/null
+            if pdftotext "$pdf" - | grep -F 'https://russelldudek.github.io/AIAction/' >/dev/null; then
+              echo "Unverified campaign URL remains in $pdf"
+              exit 1
+            fi
+          done
 
       - name: Finalize publication state
         run: |
@@ -100,11 +114,15 @@ jobs:
           import json
           manifest = Path('artifact-manifest.json')
           data = json.loads(manifest.read_text())
-          data['state'] = 'published'
+          data['state'] = 'blocked'
+          data['candidate_vision'] = None
+          data['portfolio_url'] = 'https://russelldudek.github.io/'
           data['publication'] = {
-              'repository': 'public campaign repository',
               'branch': 'main',
-              'candidate_vision': 'https://russelldudek.github.io/AIAction/'
+              'candidate_vision': None,
+              'portfolio_url': 'https://russelldudek.github.io/',
+              'repository_status': 'published',
+              'live_status': 'blocked - GitHub Pages not enabled'
           }
           manifest.write_text(json.dumps(data, indent=2) + '\n')
 
@@ -112,13 +130,26 @@ jobs:
           text = audit.read_text()
           text = text.replace(
               'State: building until publication and independent live verification complete.',
-              'State: published. Live verification remains a separate gate until GitHub Pages reports a successful deployment.'
+              'State: blocked. Readable source and validated PDFs are published; live verification is blocked because GitHub Pages is not enabled.'
+          )
+          text = text.replace(
+              'State: published. Live verification remains a separate gate until GitHub Pages reports a successful deployment.',
+              'State: blocked. Readable source and validated PDFs are published; live verification is blocked because GitHub Pages is not enabled.'
           )
           if '## Automated publication verification' not in text:
               text += '\n## Automated publication verification\n- Exact PDF page counts validated in GitHub Actions\n- Candidate files committed to main\n- Pages deployment attempted from the validated workspace\n'
+          if '## Verified URL Correction' not in text:
+              text += '\n## Verified URL Correction\n- The unverified role-specific Pages URL was removed because Pages is not enabled.\n- Candidate-facing documents use Russell\'s verified public portfolio URL: https://russelldudek.github.io/\n- The cover letter describes the role-specific package without claiming that it is live.\n- PDFs were regenerated and exact page contracts revalidated after the correction.\n'
           audit.write_text(text)
           PY
           rm -rf .campaign-bundle materialize_campaign.py
+          rm -f apply_verified_url_correction.py .github/workflows/verified-url-correction.yml
+          if grep -R -F 'https://russelldudek.github.io/AIAction/' \
+            --exclude-dir=.git \
+            --exclude='*.pdf' .; then
+            echo 'Unverified campaign URL remains in readable source.'
+            exit 1
+          fi
 
       - name: Commit validated campaign files
         shell: bash
@@ -128,7 +159,7 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
           if ! git diff --cached --quiet; then
-            git commit -m 'Refresh validated candidate PDFs'
+            git commit -m 'Use verified portfolio URL and refresh candidate PDFs'
             git push
           fi
 
@@ -163,11 +194,11 @@ jobs:
         run: |
           set -euo pipefail
           sleep 8
-          http_code=$(curl -sS -o /tmp/pages-response.json -w '%{http_code}' \
+          curl -sS -o /tmp/pages-response.json \
             -H 'Accept: application/vnd.github+json' \
             -H "Authorization: Bearer $GH_TOKEN" \
             -H 'X-GitHub-Api-Version: 2022-11-28' \
-            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/pages")
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/pages" || true
           python - <<'PY'
           from pathlib import Path
           import json, os
