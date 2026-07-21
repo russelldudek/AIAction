@@ -29,8 +29,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Materialize campaign
-        run: python materialize_campaign.py
+      - name: Materialize campaign when bundle is present
+        run: |
+          if [ -f materialize_campaign.py ]; then
+            python materialize_campaign.py
+          fi
 
       - name: Set up Chrome
         id: chrome
@@ -111,7 +114,8 @@ jobs:
               'State: building until publication and independent live verification complete.',
               'State: published. Live verification remains a separate gate until GitHub Pages reports a successful deployment.'
           )
-          text += '\n## Automated publication verification\n- Exact PDF page counts validated in GitHub Actions\n- Candidate files committed to main\n- Pages deployment attempted from the validated workspace\n'
+          if '## Automated publication verification' not in text:
+              text += '\n## Automated publication verification\n- Exact PDF page counts validated in GitHub Actions\n- Candidate files committed to main\n- Pages deployment attempted from the validated workspace\n'
           audit.write_text(text)
           PY
           rm -rf .campaign-bundle materialize_campaign.py
@@ -124,18 +128,67 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
           if ! git diff --cached --quiet; then
-            git commit -m 'Publish applied AI candidate vision and validated PDFs'
+            git commit -m 'Refresh validated candidate PDFs'
             git push
           fi
 
       - name: Configure Pages
+        id: configure
+        continue-on-error: true
         uses: actions/configure-pages@v6
 
       - name: Upload Pages artifact
+        id: upload
+        if: steps.configure.outcome == 'success'
+        continue-on-error: true
         uses: actions/upload-pages-artifact@v4
         with:
           path: '.'
 
       - name: Deploy Pages
         id: deployment
+        if: steps.configure.outcome == 'success' && steps.upload.outcome == 'success'
+        continue-on-error: true
         uses: actions/deploy-pages@v4
+
+      - name: Record Pages status
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CONFIGURE_OUTCOME: ${{ steps.configure.outcome }}
+          UPLOAD_OUTCOME: ${{ steps.upload.outcome }}
+          DEPLOY_OUTCOME: ${{ steps.deployment.outcome }}
+          DEPLOY_URL: ${{ steps.deployment.outputs.page_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sleep 8
+          http_code=$(curl -sS -o /tmp/pages-response.json -w '%{http_code}' \
+            -H 'Accept: application/vnd.github+json' \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/pages")
+          python - <<'PY'
+          from pathlib import Path
+          import json, os
+          raw = Path('/tmp/pages-response.json').read_text() if Path('/tmp/pages-response.json').exists() else ''
+          try:
+              response = json.loads(raw) if raw else None
+          except json.JSONDecodeError:
+              response = raw
+          status = {
+              'configure_outcome': os.environ.get('CONFIGURE_OUTCOME'),
+              'upload_outcome': os.environ.get('UPLOAD_OUTCOME'),
+              'deploy_outcome': os.environ.get('DEPLOY_OUTCOME'),
+              'deployment_url': os.environ.get('DEPLOY_URL') or None,
+              'api_response': response,
+          }
+          Path('pages-status.json').write_text(json.dumps(status, indent=2) + '\n')
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add pages-status.json
+          if ! git diff --cached --quiet; then
+            git commit -m 'Record candidate site deployment status'
+            git push
+          fi
