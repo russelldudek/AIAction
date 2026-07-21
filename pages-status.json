@@ -1,11 +1,9 @@
 {
-  "configure_outcome": "failure",
-  "upload_outcome": "skipped",
-  "deploy_outcome": "skipped",
+  "source_sha": null,
+  "configure_outcome": "pending",
+  "upload_outcome": "pending",
+  "deploy_outcome": "pending",
+  "live_outcome": "pending",
   "deployment_url": null,
-  "api_response": {
-    "message": "Not Found",
-    "documentation_url": "https://docs.github.com/rest/pages/pages#get-a-apiname-pages-site",
-    "status": "404"
-  }
+  "intended_url": "https://russelldudek.github.io/AIAction/"
 }

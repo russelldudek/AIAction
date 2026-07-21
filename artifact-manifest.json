@@ -1,7 +1,14 @@
 {
   "campaign": "Russell Dudek - Director of Applied AI",
-  "candidate_vision": "https://russelldudek.github.io/AIAction/",
-  "state": "published",
+  "candidate_vision": null,
+  "state": "building",
+  "experience": {
+    "name": "Living Precedent Engine",
+    "baseline": "Corporate diligence / Practice pattern",
+    "scenarios": ["Corporate", "Litigation", "Regulatory", "White Collar"],
+    "treatments": ["Matter prototype", "Practice pattern", "Cross-practice candidate", "Firm standard"],
+    "layers": ["Fact Pattern", "Knowledge Record", "Human Authority", "Evaluation", "Adoption and Ownership", "Value Evidence", "Precedent Treatment"]
+  },
   "routes": [
     "index.html",
     "resume.html",
@@ -11,6 +18,12 @@
     "workflow-precedent-review.html",
     "source-notes.html"
   ],
+  "assets": [
+    "styles.css",
+    "app.js",
+    ".nojekyll",
+    "assets/brand/README.md"
+  ],
   "pdf_contracts": {
     "resume": 2,
     "cover_letter": 1,
@@ -19,14 +32,17 @@
     "workflow_precedent_review": 2
   },
   "brand": {
-    "logo": "omitted due to explicit public trademark restriction",
+    "logo": "unavailable with documented trademark-use restriction",
     "identity": "plain-text nominative reference",
-    "palette": "candidate-authored, evidence-informed",
-    "fonts": "system substitutes"
+    "palette": "candidate-authored and evidence-informed",
+    "fonts": "system substitutes",
+    "mobile_semantic_equivalent": true
   },
   "publication": {
-    "repository": "public campaign repository",
     "branch": "main",
-    "candidate_vision": "https://russelldudek.github.io/AIAction/"
-  }
+    "candidate_vision": null,
+    "repository_status": "pending redesigned main push",
+    "live_status": "pending exact GitHub Pages verification"
+  },
+  "portfolio_url": "https://russelldudek.github.io/"
 }
