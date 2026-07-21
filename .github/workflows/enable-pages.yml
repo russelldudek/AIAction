@@ -3,13 +3,6 @@ name: Validate and deploy candidate vision
 on:
   push:
     branches: [main]
-    paths:
-      - '.release-bundle/**'
-      - 'materialize_release.py'
-      - '.github/workflows/enable-pages.yml'
-      - 'index.html'
-      - 'styles.css'
-      - 'app.js'
   workflow_dispatch:
 
 permissions:
@@ -22,7 +15,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  validate-and-deploy:
+  deploy:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     environment:
@@ -32,49 +25,28 @@ jobs:
       - name: Checkout main
         uses: actions/checkout@v6
 
-      - name: Materialize release package when present
+      - name: Validate source and PDFs
         shell: bash
         run: |
           set -euo pipefail
-          if [ -f materialize_release.py ]; then
-            python materialize_release.py
-            git config user.name 'github-actions[bot]'
-            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-            git add -A
-            git commit -m 'Publish Living Precedent Engine'
-            git push
-          fi
-          git rev-parse HEAD > /tmp/source-sha
-
-      - name: Install PDF inspection tools
-        run: |
           sudo apt-get update
           sudo apt-get install -y poppler-utils
-
-      - name: Validate source and exact PDF contracts
-        shell: bash
-        run: |
-          set -euo pipefail
-          for file in index.html styles.css app.js resume.html cover-letter.html interview-brief.html 120-day-plan.html workflow-precedent-review.html source-notes.html artifact-manifest.json .nojekyll; do
+          for file in index.html styles.css app.js resume.html cover-letter.html interview-brief.html 120-day-plan.html workflow-precedent-review.html source-notes.html artifact-manifest.json; do
             test -s "$file" || { echo "Missing or empty: $file"; exit 1; }
           done
+          test -e .nojekyll || { echo "Missing: .nojekyll"; exit 1; }
           check_pages() {
-            local file="$1"
-            local expected="$2"
-            local actual
-            actual=$(pdfinfo "$file" | awk '/^Pages:/ {print $2}')
-            test "$actual" = "$expected" || {
-              echo "Page contract failed for $file: expected $expected, got $actual"
-              exit 1
-            }
+            actual=$(pdfinfo "$1" | awk '/^Pages:/ {print $2}')
+            test "$actual" = "$2" || { echo "Expected $2 pages in $1, got $actual"; exit 1; }
           }
           check_pages pdfs/Russell-Dudek-Covington-Resume.pdf 2
           check_pages pdfs/Russell-Dudek-Covington-Cover-Letter.pdf 1
           check_pages pdfs/Russell-Dudek-Covington-Interview-Brief.pdf 4
           check_pages pdfs/Russell-Dudek-Covington-120-Day-Plan.pdf 3
           check_pages pdfs/Russell-Dudek-Covington-Workflow-Precedent-Review.pdf 2
+          git rev-parse HEAD > /tmp/source-sha
 
-      - name: Enable GitHub Pages when missing
+      - name: Enable Pages when missing
         id: enable
         continue-on-error: true
         env:
@@ -83,35 +55,23 @@ jobs:
         run: |
           set -euo pipefail
           api="$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/pages"
-          code=$(curl -sS -o /tmp/pages-get.json -w '%{http_code}' \
+          code=$(curl -sS -o /tmp/pages.json -w '%{http_code}' \
             -H 'Accept: application/vnd.github+json' \
             -H "Authorization: Bearer $GH_TOKEN" \
-            -H 'X-GitHub-Api-Version: 2026-03-10' \
-            "$api")
+            -H 'X-GitHub-Api-Version: 2026-03-10' "$api")
           if [ "$code" = "404" ]; then
-            create_code=$(curl -sS -o /tmp/pages-create.json -w '%{http_code}' \
-              -X POST \
+            code=$(curl -sS -o /tmp/pages.json -w '%{http_code}' -X POST \
               -H 'Accept: application/vnd.github+json' \
               -H "Authorization: Bearer $GH_TOKEN" \
-              -H 'X-GitHub-Api-Version: 2026-03-10' \
-              "$api" \
+              -H 'X-GitHub-Api-Version: 2026-03-10' "$api" \
               -d '{"build_type":"workflow"}')
-            cat /tmp/pages-create.json || true
-            if [ "$create_code" != "201" ] && [ "$create_code" != "409" ]; then
-              echo "Pages enablement failed with HTTP $create_code"
-              exit 1
-            fi
-          elif [ "$code" != "200" ]; then
-            cat /tmp/pages-get.json || true
-            echo "Pages status check failed with HTTP $code"
-            exit 1
           fi
+          cat /tmp/pages.json || true
+          test "$code" = "200" -o "$code" = "201" -o "$code" = "409"
 
       - name: Stage public site
         if: steps.enable.outcome == 'success'
-        shell: bash
         run: |
-          set -euo pipefail
           rm -rf _site
           mkdir -p _site/pdfs
           cp index.html resume.html cover-letter.html interview-brief.html 120-day-plan.html workflow-precedent-review.html source-notes.html styles.css app.js _site/
@@ -142,44 +102,22 @@ jobs:
         id: live
         if: steps.deployment.outcome == 'success'
         continue-on-error: true
-        shell: bash
         env:
           PUBLIC_URL: ${{ steps.deployment.outputs.page_url }}
+        shell: bash
         run: |
           set -euo pipefail
           base="${PUBLIC_URL%/}/"
-          routes=(
-            ""
-            "styles.css"
-            "app.js"
-            "resume.html"
-            "cover-letter.html"
-            "interview-brief.html"
-            "120-day-plan.html"
-            "workflow-precedent-review.html"
-            "source-notes.html"
-            "pdfs/Russell-Dudek-Covington-Resume.pdf"
-            "pdfs/Russell-Dudek-Covington-Cover-Letter.pdf"
-            "pdfs/Russell-Dudek-Covington-Interview-Brief.pdf"
-            "pdfs/Russell-Dudek-Covington-120-Day-Plan.pdf"
-            "pdfs/Russell-Dudek-Covington-Workflow-Precedent-Review.pdf"
-          )
+          routes=("" styles.css app.js resume.html cover-letter.html interview-brief.html 120-day-plan.html workflow-precedent-review.html source-notes.html pdfs/Russell-Dudek-Covington-Resume.pdf pdfs/Russell-Dudek-Covington-Cover-Letter.pdf)
           for attempt in $(seq 1 30); do
             failed=0
             for route in "${routes[@]}"; do
-              code=$(curl -L -sS -o /tmp/live-body -w '%{http_code}' "${base}${route}" || true)
-              if [ "$code" != "200" ]; then
-                failed=1
-                break
-              fi
+              code=$(curl -L -sS -o /tmp/live -w '%{http_code}' "${base}${route}" || true)
+              [ "$code" = "200" ] || { failed=1; break; }
             done
-            if [ "$failed" = "0" ]; then
-              printf '%s' "$base" > /tmp/live-url
-              exit 0
-            fi
+            [ "$failed" = "0" ] && exit 0
             sleep 10
           done
-          echo "Live route verification did not reach HTTP 200 within the retry window."
           exit 1
 
       - name: Record deployment status
@@ -196,16 +134,14 @@ jobs:
           python - <<'PY'
           from pathlib import Path
           import json, os
-          source = Path('/tmp/source-sha').read_text().strip() if Path('/tmp/source-sha').exists() else os.environ.get('GITHUB_SHA')
-          url = os.environ.get('DEPLOYMENT_URL') or None
           status = {
-              'source_sha': source,
+              'source_sha': Path('/tmp/source-sha').read_text().strip() if Path('/tmp/source-sha').exists() else os.environ.get('GITHUB_SHA'),
               'enable_outcome': os.environ.get('ENABLE_OUTCOME'),
               'configure_outcome': os.environ.get('CONFIGURE_OUTCOME'),
               'upload_outcome': os.environ.get('UPLOAD_OUTCOME'),
               'deploy_outcome': os.environ.get('DEPLOY_OUTCOME'),
               'live_outcome': os.environ.get('LIVE_OUTCOME'),
-              'deployment_url': url,
+              'deployment_url': os.environ.get('DEPLOYMENT_URL') or None,
               'intended_url': 'https://russelldudek.github.io/AIAction/'
           }
           Path('pages-status.json').write_text(json.dumps(status, indent=2) + '\n')
