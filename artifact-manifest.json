@@ -1,9 +1,10 @@
 {
   "campaign": "Russell Dudek - Director of Applied AI",
-  "candidate_vision": null,
-  "state": "building",
+  "candidate_vision": "https://russelldudek.github.io/DeepHow/covington-ai/",
+  "state": "complete",
   "experience": {
-    "name": "Living Precedent Engine",
+    "name": "Living Precedent Sphere",
+    "operating_artifact": "Applied AI Reporter",
     "baseline": "Corporate diligence / Practice pattern",
     "scenarios": ["Corporate", "Litigation", "Regulatory", "White Collar"],
     "treatments": ["Matter prototype", "Practice pattern", "Cross-practice candidate", "Firm standard"],
@@ -34,15 +35,17 @@
   "brand": {
     "logo": "unavailable with documented trademark-use restriction",
     "identity": "plain-text nominative reference",
-    "palette": "candidate-authored and evidence-informed",
-    "fonts": "system substitutes",
+    "palette": "candidate-authored navy, ivory, blue, and brass",
+    "fonts": "licensed system substitutes",
     "mobile_semantic_equivalent": true
   },
   "publication": {
     "branch": "main",
-    "candidate_vision": null,
-    "repository_status": "pending redesigned main push",
-    "live_status": "pending exact GitHub Pages verification"
+    "source_campaign_commit": "ad226138732728144e02eaa36d7e3e66a51c2db5",
+    "candidate_vision": "https://russelldudek.github.io/DeepHow/covington-ai/",
+    "pages_source_commit": "6c4325d2c271ee8f22ab638ac2c64cd594786ed8",
+    "repository_status": "published",
+    "live_status": "verified"
   },
   "portfolio_url": "https://russelldudek.github.io/"
 }
