@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - '.deploy-netlify-ready'
+      - '.deploy-netlify-retry'
 
 permissions:
   contents: write
@@ -18,6 +19,22 @@ jobs:
       - name: Checkout validated main
         uses: actions/checkout@v4
 
+      - name: Record deployment startup
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import json, datetime
+          Path('deploy-started.json').write_text(json.dumps({
+            'source_sha': '${{ github.sha }}',
+            'started_at_utc': datetime.datetime.now(datetime.timezone.utc).isoformat()
+          }, indent=2) + '\n')
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add deploy-started.json
+          git commit -m 'Record Netlify deployment startup'
+          git push
+
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
@@ -27,7 +44,7 @@ jobs:
         run: >-
           npx -y @netlify/mcp@latest
           --site-id 10a807db-a525-471a-b71f-3b871399f7f2
-          --proxy-path "https://netlify-mcp.netlify.app//proxy/eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2R0NNIn0..s-VHwjXcz2B64-6u.cnG8F99HOkshun_X-Br8kiSfTjQtSkiEbn50mLQW9ZJrcTQHKsDI5FC0lsX8-YpJx_9t5dGPqLDw8zsV49ERLroEvYk3mnTUJtKRcF91DOTDQLJPThP3KR6_OefjOBJpvtvQ2Zp_7tZ-XsLDJBrRIj6s1hCEK8E4hFP5rhpf5PeFHp3wkeM8orwjgBPnAMm2eB2plgTl-msvs_LLq6txBw7FSJ_FauuLuAblKbGG3KDXavppSuOcIU7bwslO4r_VoORKq6oPXQbgxNmeRoiPjbYto4L89PXcEHrkEdReDj4V4TC5R915MYj4Hu04usWCu9j59YpeubQ5Z3kAeMBPuzWyZYAkIPzpNBSrg8Mo266zWgKut-D_NpI9AT9fG-uMxH2sXhaE.b4zsLI2FFXMiY4QUAw6WYg"
+          --proxy-path "https://netlify-mcp.netlify.app//proxy/eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2R0NNIn0..iWaasoya32MQoulG.jXekiiDvr8E-UDOBFf05tpFVggCILEjI-d6eWb2qaBZW1dvVGe0y4sejHzlM8t0XeLOz3cvIvFE-gWIQAi0AcbltnhuP2k5eBe6aovwFpHiil8LfGUWR4f3VHQ_MUiFj-iYb-do0M18MVwXfDNuE2CpV1Rkr7io4GSSSI3dD7DPPbPI41awMb_0WNc2Xvurus-eiqYN8O_RhsBF6KysLPSIChzDjWnofyY-WkH0PtkUo1FkKo_SLrQqMiyb66nQ88Ej_S9r2hZzeQq_YKZMf2j92QJwa8cQJlrT-II1ZwGreHaatN7TNu-W1Jp87XKcHqCTpZ84sWQT03XRsWi2l7vHZUAUaNqzg0qmhrm5zi468aPnuJ_ppw15qHOmsyQTg5NYbVkki._ZrGTJxwuT_YbNDWvzwDVg"
           --no-wait
 
       - name: Verify exact live experience
@@ -66,7 +83,7 @@ jobs:
             'verified_at_utc': datetime.datetime.now(datetime.timezone.utc).isoformat()
           }, indent=2) + '\n')
           PY
-          rm -f .github/workflows/deploy-netlify-once.yml .deploy-netlify-ready
+          rm -f .github/workflows/deploy-netlify-once.yml .deploy-netlify-ready .deploy-netlify-retry deploy-started.json
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
