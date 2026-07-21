@@ -1,0 +1,33 @@
+name: Resolve deployment hosts
+
+on:
+  push:
+    paths:
+      - '.github/workflows/resolve-netlify.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Resolve Netlify hosts
+        run: |
+          set -euo pipefail
+          {
+            for host in netlify-mcp.netlify.app api.netlify.com russell-dudek-covington-ai.netlify.app; do
+              echo "[$host]"
+              getent ahostsv4 "$host" | awk '{print $1}' | sort -u
+            done
+          } > netlify-hosts.txt
+          cat netlify-hosts.txt
+      - name: Record host resolution
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add netlify-hosts.txt
+          git commit -m 'Record deployment host resolution'
+          git push
