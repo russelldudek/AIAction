@@ -32,21 +32,17 @@ jobs:
         run: |
           set -euo pipefail
           routes=("" styles.css app.js resume.html cover-letter.html interview-brief.html 120-day-plan.html workflow-precedent-review.html source-notes.html pdfs/Russell-Dudek-Covington-Resume.pdf pdfs/Russell-Dudek-Covington-Cover-Letter.pdf)
-          for attempt in $(seq 1 12); do
-            failed=0
-            for route in "${routes[@]}"; do
-              code=$(curl -L -sS --connect-timeout 8 --max-time 18 -o /tmp/live-body -w '%{http_code}' "${LIVE_URL}${route}" || true)
-              [ "$code" = "200" ] || { failed=1; break; }
-            done
-            if [ "$failed" = "0" ]; then
-              curl -L -sS --connect-timeout 8 --max-time 18 "${LIVE_URL}" -o /tmp/live-index
-              grep -q 'Living Precedent Engine' /tmp/live-index || failed=1
-              grep -q 'Build the common law of AI-enabled work' /tmp/live-index || failed=1
-            fi
-            [ "$failed" = "0" ] && exit 0
-            sleep 10
+          failed=0
+          for route in "${routes[@]}"; do
+            code=$(curl -L -sS --connect-timeout 8 --max-time 18 -o /tmp/live-body -w '%{http_code}' "${LIVE_URL}${route}" || true)
+            [ "$code" = "200" ] || { failed=1; break; }
           done
-          exit 1
+          if [ "$failed" = "0" ]; then
+            curl -L -sS --connect-timeout 8 --max-time 18 "${LIVE_URL}" -o /tmp/live-index
+            grep -q 'Living Precedent Engine' /tmp/live-index || failed=1
+            grep -q 'Build the common law of AI-enabled work' /tmp/live-index || failed=1
+          fi
+          [ "$failed" = "0" ]
 
       - name: Record live-site status
         if: always()
