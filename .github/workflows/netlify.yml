@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 env:
-  LIVE_URL: https://russell-dudek-covington-ai.netlify.app/
+  LIVE_URL: https://6a5f04af44a6f79a3a2652a5--russell-dudek-covington-ai.netlify.app/
 
 concurrency:
   group: live-review
@@ -29,7 +29,7 @@ jobs:
         run: |
           set -euo pipefail
           routes=("" styles.css app.js resume.html cover-letter.html interview-brief.html 120-day-plan.html workflow-precedent-review.html source-notes.html pdfs/Russell-Dudek-Covington-Resume.pdf pdfs/Russell-Dudek-Covington-Cover-Letter.pdf)
-          for attempt in $(seq 1 30); do
+          for attempt in $(seq 1 6); do
             failed=0
             for route in "${routes[@]}"; do
               code=$(curl -L -sS -o /tmp/live-body -w '%{http_code}' "${LIVE_URL}${route}" || true)
