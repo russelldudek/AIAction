@@ -1,35 +1,38 @@
 # Candidate Campaign Audit
 
-State: building pending exact live GitHub Pages verification of the redesigned main source.
+State: complete. The redesigned static campaign is published and verified live.
 
 ## 2026 visual and interaction correction
 
-The prior campaign established the correct thesis but lacked the desired 2026 visual authority. The landing experience was rebuilt as a Living Precedent Engine with a premium editorial system, spatial seven-layer folios, a visible authority thread, atomic practice and treatment transitions, richer full-page pacing, and a mobile-specific semantic composition.
+The earlier paper-first landing page was replaced with a high-authority digital experience built around one dominant visual idea: the Living Precedent Sphere. The page now opens with a cinematic navy-and-brass legal-AI system, then advances through the actual mandate, the seven-record Applied AI Reporter, an atomic practice-workflow studio, operating tensions, verified evidence, a 120-day entry route, and the complete application-document set.
 
-## Verified local gates
+## Verified source and local gates
 
 - Factual integrity: verified candidate evidence only
 - Narrative continuity: one thesis across site and documents
-- Brand fidelity: plain-text identity with documented logo exception and original candidate visual system
-- Candidate-facing confidentiality: passed across public source and extracted PDF text
-- Accessibility: semantic controls, roving keyboard navigation, visible focus, live announcements, reduced motion
-- Responsive behavior: passed at 1440x900, 1280x800, 768x1024, 390x844, and 320x800
-- Hero restraint: one thesis, one visual idea, two prioritized actions
-- Motion: intermediate runtime state, one-shot assembly, stable settlement, and reduced-motion completion verified
-- State synchronization: all seven layers, treatment, controls, record copy, and announcement update atomically
-- Rapid selection: final request remains authoritative
-- Reset: Corporate / Practice pattern baseline restored
-- CTA advancement: primary hero action advances to the operating model
-- Screen documents: reflow and visible footers passed at 390 and 320 pixels
-- Print: exact 2 / 1 / 4 / 3 / 2 page contracts after regeneration
-- Downloads: same-origin PDF download links with explicit filenames
-- Horizontal overflow: zero at all required viewports
-- Browser console errors: zero in the local audit
-- Readable source: passed
+- Brand fidelity: plain-text Covington identity with documented logo exception and original candidate visual system
+- Candidate-facing confidentiality: passed; no private orchestration or campaign-source repository references in the deployed static site
+- Hero restraint: one thesis, one dominant Living Precedent Sphere, and two advancement actions
+- Motion: one-shot orbit, node, core, route, and record resolution with stable settlement
+- Reduced motion: complete semantic end state
+- State synchronization: scenario, treatment, controls, sphere label, record copy, disposition, and announcement update atomically
+- Keyboard and reset behavior: passed
+- Responsive review: passed at 1440x900, 1280x800, 768x1024, 390x844, and 320x800
+- Horizontal overflow: zero at every audited viewport
+- Browser errors: zero in the local Chromium matrix
+- Screen documents: reflow passed at 390 and 320 pixels
+- Print/PDF contracts: exact 2 / 1 / 4 / 3 / 2 pages
+- Downloads: same-origin PDF routes with explicit filenames
+- Readable public `main` source: passed
 
-## Remaining release gate
+## Verified live publication
 
-- Push the complete redesign and regenerated PDFs to `main`.
-- Enable or confirm GitHub Pages with GitHub Actions as the source.
-- Verify HTTP 200 for the root, stylesheet, script, document routes, and PDFs.
-- Verify that the live source corresponds to the audited public files.
+- Live candidate vision: https://russelldudek.github.io/DeepHow/covington-ai/
+- Source campaign commit: `ad226138732728144e02eaa36d7e3e66a51c2db5`
+- Live Pages trigger commit: `6c4325d2c271ee8f22ab638ac2c64cd594786ed8`
+- Homepage signature: passed
+- Stylesheet signature: passed
+- Interaction-controller signature: passed
+- Resume, cover letter, interview brief, 120-day plan, and Workflow Precedent Review routes: passed
+- Resume and cover-letter PDF routes: passed
+- Live verification receipt: `covington-ai/live-status.json` on the Pages host
