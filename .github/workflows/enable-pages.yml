@@ -75,6 +75,8 @@ jobs:
           check_pages pdfs/Russell-Dudek-Covington-Workflow-Precedent-Review.pdf 2
 
       - name: Enable GitHub Pages when missing
+        id: enable
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -106,6 +108,7 @@ jobs:
           fi
 
       - name: Stage public site
+        if: steps.enable.outcome == 'success'
         shell: bash
         run: |
           set -euo pipefail
@@ -116,18 +119,29 @@ jobs:
           touch _site/.nojekyll
 
       - name: Configure Pages
+        id: configure
+        if: steps.enable.outcome == 'success'
+        continue-on-error: true
         uses: actions/configure-pages@v6
 
       - name: Upload Pages artifact
+        id: upload
+        if: steps.configure.outcome == 'success'
+        continue-on-error: true
         uses: actions/upload-pages-artifact@v4
         with:
           path: _site
 
       - name: Deploy Pages
         id: deployment
+        if: steps.upload.outcome == 'success'
+        continue-on-error: true
         uses: actions/deploy-pages@v4
 
       - name: Verify live routes
+        id: live
+        if: steps.deployment.outcome == 'success'
+        continue-on-error: true
         shell: bash
         env:
           PUBLIC_URL: ${{ steps.deployment.outputs.page_url }}
@@ -168,28 +182,42 @@ jobs:
           echo "Live route verification did not reach HTTP 200 within the retry window."
           exit 1
 
-      - name: Record live deployment
-        if: success()
+      - name: Record deployment status
+        if: always()
+        env:
+          ENABLE_OUTCOME: ${{ steps.enable.outcome }}
+          CONFIGURE_OUTCOME: ${{ steps.configure.outcome }}
+          UPLOAD_OUTCOME: ${{ steps.upload.outcome }}
+          DEPLOY_OUTCOME: ${{ steps.deployment.outcome }}
+          LIVE_OUTCOME: ${{ steps.live.outcome }}
+          DEPLOYMENT_URL: ${{ steps.deployment.outputs.page_url }}
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
-          import json
-          url = Path('/tmp/live-url').read_text().strip()
-          Path('pages-status.json').write_text(json.dumps({
-              'source_sha': Path('/tmp/source-sha').read_text().strip(),
-              'configure_outcome': 'success',
-              'upload_outcome': 'success',
-              'deploy_outcome': 'success',
-              'live_outcome': 'success',
+          import json, os
+          source = Path('/tmp/source-sha').read_text().strip() if Path('/tmp/source-sha').exists() else os.environ.get('GITHUB_SHA')
+          url = os.environ.get('DEPLOYMENT_URL') or None
+          status = {
+              'source_sha': source,
+              'enable_outcome': os.environ.get('ENABLE_OUTCOME'),
+              'configure_outcome': os.environ.get('CONFIGURE_OUTCOME'),
+              'upload_outcome': os.environ.get('UPLOAD_OUTCOME'),
+              'deploy_outcome': os.environ.get('DEPLOY_OUTCOME'),
+              'live_outcome': os.environ.get('LIVE_OUTCOME'),
               'deployment_url': url,
-              'api_response': {'html_url': url, 'build_type': 'workflow'}
-          }, indent=2) + '\n')
+              'intended_url': 'https://russelldudek.github.io/AIAction/'
+          }
+          Path('pages-status.json').write_text(json.dumps(status, indent=2) + '\n')
           PY
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add pages-status.json
           if ! git diff --cached --quiet; then
-            git commit -m 'Record live candidate vision deployment'
+            git commit -m 'Record candidate vision deployment status'
             git push
           fi
+
+      - name: Fail when Pages is not live
+        if: steps.enable.outcome != 'success' || steps.configure.outcome != 'success' || steps.upload.outcome != 'success' || steps.deployment.outcome != 'success' || steps.live.outcome != 'success'
+        run: exit 1
