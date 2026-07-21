@@ -1,0 +1,102 @@
+name: Apply verified portfolio URL correction
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apply_verified_url_correction.py'
+      - '.github/workflows/verified-url-correction.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  correct-and-regenerate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Apply verified URL correction
+        run: python apply_verified_url_correction.py
+
+      - name: Set up Chrome
+        id: chrome
+        uses: browser-actions/setup-chrome@v2
+
+      - name: Install PDF inspection tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y poppler-utils
+
+      - name: Regenerate PDFs
+        shell: bash
+        run: |
+          set -euo pipefail
+          CHROME='${{ steps.chrome.outputs.chrome-path }}'
+          mkdir -p pdfs
+          render_pdf() {
+            local html="$1"
+            local output="$2"
+            timeout 90s "$CHROME" \
+              --headless=new \
+              --no-sandbox \
+              --disable-gpu \
+              --disable-dev-shm-usage \
+              --allow-file-access-from-files \
+              --run-all-compositor-stages-before-draw \
+              --virtual-time-budget=3000 \
+              --no-pdf-header-footer \
+              --print-to-pdf="$GITHUB_WORKSPACE/pdfs/$output" \
+              "file://$GITHUB_WORKSPACE/$html"
+          }
+          render_pdf resume.html Russell-Dudek-Covington-Resume.pdf
+          render_pdf cover-letter.html Russell-Dudek-Covington-Cover-Letter.pdf
+          render_pdf interview-brief.html Russell-Dudek-Covington-Interview-Brief.pdf
+          render_pdf 120-day-plan.html Russell-Dudek-Covington-120-Day-Plan.pdf
+          render_pdf workflow-precedent-review.html Russell-Dudek-Covington-Workflow-Precedent-Review.pdf
+
+      - name: Validate final contracts and URLs
+        shell: bash
+        run: |
+          set -euo pipefail
+          check_pages() {
+            local file="$1"
+            local expected="$2"
+            local actual
+            actual=$(pdfinfo "$file" | awk '/^Pages:/ {print $2}')
+            test "$actual" = "$expected"
+          }
+          check_pages pdfs/Russell-Dudek-Covington-Resume.pdf 2
+          check_pages pdfs/Russell-Dudek-Covington-Cover-Letter.pdf 1
+          check_pages pdfs/Russell-Dudek-Covington-Interview-Brief.pdf 4
+          check_pages pdfs/Russell-Dudek-Covington-120-Day-Plan.pdf 3
+          check_pages pdfs/Russell-Dudek-Covington-Workflow-Precedent-Review.pdf 2
+          for pdf in pdfs/*.pdf; do
+            pdftotext "$pdf" - | grep -F 'https://russelldudek.github.io/' >/dev/null
+            if pdftotext "$pdf" - | grep -F 'https://russelldudek.github.io/AIAction/' >/dev/null; then
+              echo "Unverified campaign URL remains in $pdf"
+              exit 1
+            fi
+          done
+
+      - name: Remove staging and scan readable source
+        shell: bash
+        run: |
+          rm -f apply_verified_url_correction.py .github/workflows/verified-url-correction.yml
+          if grep -R -F 'https://russelldudek.github.io/AIAction/' \
+            --exclude-dir=.git \
+            --exclude='*.pdf' .; then
+            echo 'Unverified campaign URL remains in readable source.'
+            exit 1
+          fi
+
+      - name: Commit verified candidate materials
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Use verified portfolio URL and regenerate candidate PDFs'
+          git push
