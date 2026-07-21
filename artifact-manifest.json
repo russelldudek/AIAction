@@ -1,0 +1,32 @@
+{
+  "campaign": "Russell Dudek - Director of Applied AI",
+  "candidate_vision": "https://russelldudek.github.io/AIAction/",
+  "state": "published",
+  "routes": [
+    "index.html",
+    "resume.html",
+    "cover-letter.html",
+    "interview-brief.html",
+    "120-day-plan.html",
+    "workflow-precedent-review.html",
+    "source-notes.html"
+  ],
+  "pdf_contracts": {
+    "resume": 2,
+    "cover_letter": 1,
+    "interview_brief": 4,
+    "entry_plan": 3,
+    "workflow_precedent_review": 2
+  },
+  "brand": {
+    "logo": "omitted due to explicit public trademark restriction",
+    "identity": "plain-text nominative reference",
+    "palette": "candidate-authored, evidence-informed",
+    "fonts": "system substitutes"
+  },
+  "publication": {
+    "repository": "public campaign repository",
+    "branch": "main",
+    "candidate_vision": "https://russelldudek.github.io/AIAction/"
+  }
+}
