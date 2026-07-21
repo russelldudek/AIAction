@@ -1,0 +1,90 @@
+name: Verify live Pages review
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/verify-live-pages-review.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Verify Pages wrapper and immutable campaign source
+        id: verify
+        continue-on-error: true
+        env:
+          LIVE_URL: https://russelldudek.github.io/DeepHow/covington-ai/
+          SOURCE_URL: https://raw.githack.com/russelldudek/AIAction/63fbe69c06b5cfc498b23ee6cd17182ad549e8dd/index.html
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 30); do
+            live_code=$(curl -L -sS --connect-timeout 8 --max-time 30 -o /tmp/live.html -w '%{http_code}' "$LIVE_URL" || true)
+            source_code=$(curl -L -sS --connect-timeout 8 --max-time 30 -D /tmp/source.headers -o /tmp/source.html -w '%{http_code}' "$SOURCE_URL" || true)
+            if [ "$live_code" = '200' ] && [ "$source_code" = '200' ]; then
+              grep -q 'Living Precedent Engine' /tmp/live.html
+              grep -q 'raw.githack.com/russelldudek/AIAction/63fbe69c06b5cfc498b23ee6cd17182ad549e8dd/index.html' /tmp/live.html
+              grep -q 'Living Precedent Engine' /tmp/source.html
+              grep -q 'Build the common law of AI-enabled work' /tmp/source.html
+              if grep -Eiq '^x-frame-options:[[:space:]]*(deny|sameorigin)' /tmp/source.headers; then
+                echo 'Source blocks cross-origin framing'
+                exit 1
+              fi
+              if grep -Eiq '^content-security-policy:.*frame-ancestors[[:space:]]+[^;]*(none|self)' /tmp/source.headers; then
+                echo 'Source CSP blocks cross-origin framing'
+                exit 1
+              fi
+              sha256sum /tmp/live.html /tmp/source.html
+              exit 0
+            fi
+            echo "attempt=$attempt live=$live_code source=$source_code"
+            sleep 10
+          done
+          exit 1
+
+      - name: Record verification result
+        if: always()
+        env:
+          VERIFY_OUTCOME: ${{ steps.verify.outcome }}
+          LIVE_URL: https://russelldudek.github.io/DeepHow/covington-ai/
+          SOURCE_URL: https://raw.githack.com/russelldudek/AIAction/63fbe69c06b5cfc498b23ee6cd17182ad549e8dd/index.html
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib, json, os
+          live = Path('/tmp/live.html').read_bytes() if Path('/tmp/live.html').exists() else b''
+          source = Path('/tmp/source.html').read_bytes() if Path('/tmp/source.html').exists() else b''
+          headers = Path('/tmp/source.headers').read_text(errors='replace') if Path('/tmp/source.headers').exists() else ''
+          record = {
+              'live_url': os.environ['LIVE_URL'],
+              'immutable_source_url': os.environ['SOURCE_URL'],
+              'source_commit': '63fbe69c06b5cfc498b23ee6cd17182ad549e8dd',
+              'verification_outcome': os.environ.get('VERIFY_OUTCOME'),
+              'live_signature_found': b'Living Precedent Engine' in live,
+              'source_signature_found': b'Living Precedent Engine' in source and b'Build the common law of AI-enabled work' in source,
+              'frame_blocking_header_found': ('x-frame-options: deny' in headers.lower() or 'x-frame-options: sameorigin' in headers.lower()),
+              'live_sha256': hashlib.sha256(live).hexdigest() if live else None,
+              'source_sha256': hashlib.sha256(source).hexdigest() if source else None,
+          }
+          Path('live-pages-review-status.json').write_text(json.dumps(record, indent=2) + '\n')
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add live-pages-review-status.json
+          if ! git diff --cached --quiet; then
+            git commit -m 'Record verified live Pages review'
+            git push
+          fi
+
+      - name: Enforce verification
+        if: steps.verify.outcome != 'success'
+        run: exit 1
