@@ -1,8 +1,7 @@
 {
-  "source_sha": "ba44fb9203402a2da31fbeade8d454ebba66c5e2",
-  "token_available": false,
-  "deploy_outcome": "failure",
-  "live_outcome": "skipped",
+  "source_sha": "c2c918180c361cc870325a19e65a04ae156499c4",
+  "live_outcome": "failure",
   "live_url": "https://russell-dudek-covington-ai.netlify.app/",
-  "deploy_response": null
+  "source_signature_found": false,
+  "live_index_sha256": null
 }
