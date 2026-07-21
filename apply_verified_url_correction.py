@@ -44,10 +44,6 @@ text = text.replace(
     'State: published. Live verification remains a separate gate until GitHub Pages reports a successful deployment.',
     'State: blocked. Readable source and validated PDFs are published; live verification is blocked because GitHub Pages is not enabled.'
 )
-text = text.replace(
-    'State: blocked. Readable source and validated PDFs are published; live verification is blocked because GitHub Pages is not enabled.',
-    'State: blocked. Readable source and validated PDFs are published; live verification is blocked because GitHub Pages is not enabled.'
-)
 section = '''
 ## Verified URL Correction
 - The unverified role-specific Pages URL was removed from candidate-facing documents because Pages is not enabled.
@@ -59,10 +55,6 @@ if '## Verified URL Correction' not in text:
     text = text.rstrip() + '\n' + section
 else:
     text = text.split('## Verified URL Correction')[0].rstrip() + '\n' + section
-text = text.replace(
-    '- Material-correction revalidation: passed locally and on main; live proof remains blocked by Pages enablement',
-    '- Material-correction revalidation: passed locally and on main; live proof remains blocked by Pages enablement'
-)
 audit.write_text(text.rstrip() + '\n', encoding='utf-8')
 
 print('Verified portfolio URL correction applied.')
