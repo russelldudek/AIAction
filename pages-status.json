@@ -1,0 +1,11 @@
+{
+  "configure_outcome": "failure",
+  "upload_outcome": "skipped",
+  "deploy_outcome": "skipped",
+  "deployment_url": null,
+  "api_response": {
+    "message": "Not Found",
+    "documentation_url": "https://docs.github.com/rest/pages/pages#get-a-apiname-pages-site",
+    "status": "404"
+  }
+}
