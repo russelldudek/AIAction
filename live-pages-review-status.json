@@ -1,0 +1,11 @@
+{
+  "live_url": "https://russelldudek.github.io/DeepHow/covington-ai/",
+  "immutable_source_url": "https://raw.githack.com/russelldudek/AIAction/63fbe69c06b5cfc498b23ee6cd17182ad549e8dd/index.html",
+  "source_commit": "63fbe69c06b5cfc498b23ee6cd17182ad549e8dd",
+  "verification_outcome": "success",
+  "live_signature_found": true,
+  "source_signature_found": true,
+  "frame_blocking_header_found": false,
+  "live_sha256": "989ae3d215ed8b9e2c2360bbedbd7382c7483a9d8459d26597ec5115ea0fe93e",
+  "source_sha256": "1c1a0cdc657b512ca50f23b92c8834e7f287b907d3f62fd1577f35274c90224d"
+}
